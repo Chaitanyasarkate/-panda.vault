@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List, Optional
+from pydantic import field_validator
+from typing import List, Optional, Union
 import os
 import secrets
 
@@ -25,7 +26,7 @@ class Settings(BaseSettings):
     DATABASE_URL: Optional[str] = None
 
     # CORS
-    BACKEND_CORS_ORIGINS: List[str] = [
+    BACKEND_CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:8000",
@@ -38,6 +39,11 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
+    def get_cors_origins(self) -> List[str]:
+        if isinstance(self.BACKEND_CORS_ORIGINS, str):
+            return [orig.strip() for orig in self.BACKEND_CORS_ORIGINS.split(",") if orig.strip()]
+        return self.BACKEND_CORS_ORIGINS
+
     def validate_security(self) -> None:
         if self.ENVIRONMENT == "production":
             if "change-in-production" in self.JWT_SECRET or len(self.JWT_SECRET) < 32:
@@ -46,7 +52,13 @@ class Settings(BaseSettings):
 
     def get_database_url(self) -> str:
         if self.DATABASE_URL:
-            return self.DATABASE_URL
+            url = self.DATABASE_URL.strip()
+            # Automatically adapt standard cloud provider PostgreSQL URLs to asyncpg dialect
+            if url.startswith("postgres://"):
+                url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
+                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            return url
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
 settings = Settings()

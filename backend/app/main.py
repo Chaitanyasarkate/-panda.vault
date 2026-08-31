@@ -37,12 +37,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS Configuration
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-]
+origins = settings.get_cors_origins()
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,7 +54,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     
     # Validate origin against allowed whitelist
     req_origin = request.headers.get("origin", "")
-    allowed_origin = req_origin if req_origin in origins else "http://localhost:3000"
+    allowed_origin = req_origin if req_origin in origins else (origins[0] if origins else "*")
     
     # Return sanitized error message without leaking internal database or system details
     error_detail = "An internal server error occurred. Please try again later."
