@@ -69,11 +69,25 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+@app.get("/", tags=["Root"])
+def root():
+    """Root endpoint for status checks."""
+    return {
+        "status": "ok",
+        "service": "panda.vault API"
+    }
+
 @app.get("/health", tags=["Health"])
+def health():
+    """Dedicated health endpoint returning instant health status."""
+    return {
+        "status": "healthy"
+    }
+
 @app.get("/api/health", tags=["Health"])
 async def health_check(db: AsyncSession = Depends(get_db)):
     """
-    Health check endpoint verifying FastAPI service status and database connectivity.
+    Detailed health check endpoint verifying database connectivity.
     """
     db_status = "connected"
     try:

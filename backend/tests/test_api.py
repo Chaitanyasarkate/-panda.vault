@@ -4,11 +4,18 @@ from app.core.config import settings
 
 @pytest.mark.asyncio
 async def test_health_check(client: AsyncClient):
-    response = await client.get("/health")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] in ["ok", "degraded"]
-    assert data["service"] == settings.PROJECT_NAME
+    root_resp = await client.get("/")
+    assert root_resp.status_code == 200
+    assert root_resp.json()["status"] == "ok"
+    assert root_resp.json()["service"] == "panda.vault API"
+
+    health_resp = await client.get("/health")
+    assert health_resp.status_code == 200
+    assert health_resp.json()["status"] == "healthy"
+
+    api_health = await client.get("/api/health")
+    assert api_health.status_code == 200
+    assert api_health.json()["status"] in ["ok", "degraded"]
 
 @pytest.mark.asyncio
 async def test_user_registration_and_login_flow(client: AsyncClient):
