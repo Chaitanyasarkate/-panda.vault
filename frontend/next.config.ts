@@ -29,11 +29,11 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' 'wasm-unsafe-eval'",
+      "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
-      "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 https://*.yourdomain.com ws://localhost:3000 wss://localhost:3000 ws://127.0.0.1:3000",
+      "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 https://*.yourdomain.com https://panda-vault-api.onrender.com ws://localhost:3000 wss://localhost:3000 ws://127.0.0.1:3000",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
