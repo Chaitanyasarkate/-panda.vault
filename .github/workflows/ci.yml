@@ -1,0 +1,94 @@
+name: panda.vault CI Security & Test Suite
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  backend-audit-and-test:
+    name: Backend Security & Pytest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-asyncio anyio bandit
+
+      - name: Security Scan (Bandit)
+        run: |
+          bandit -r backend/app -ll
+
+      - name: Run Backend Pytest Suite
+        run: |
+          cd backend
+          python -m pytest -v
+
+  frontend-test-and-build:
+    name: Frontend Vitest & Next.js Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package.json
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run Frontend Vitest Suite
+        run: |
+          cd frontend
+          npx vitest run
+
+      - name: Build Next.js Production Bundle
+        run: |
+          cd frontend
+          npm run build
+
+  extension-test-and-build:
+    name: Extension Vitest & Bundle Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: extension/package.json
+
+      - name: Install Extension Dependencies
+        run: |
+          cd extension
+          npm ci
+
+      - name: Run Extension Vitest Suite
+        run: |
+          cd extension
+          npx vitest run
+
+      - name: Build Extension Production Bundle
+        run: |
+          cd extension
+          npm run build

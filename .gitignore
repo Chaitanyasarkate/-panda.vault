@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+venv/
+.venv/
+.pytest_cache/
+
+# Next.js & Vite Builds
+.next/
+dist/
+build/
+out/
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite3
+
+# Backups & Logs
+*.log
+*.sql.gz.enc
+var/
+
+# IDE & System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
