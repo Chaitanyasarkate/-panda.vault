@@ -1,5 +1,22 @@
 import type { NextConfig } from "next";
 
+const connectSources = [
+  "'self'",
+  "http://localhost:8000",
+  "http://127.0.0.1:8000",
+  "https://*.yourdomain.com",
+  "https://*.onrender.com",
+  "https://panda-vault.onrender.com",
+  "https://*.vercel.app",
+  "ws://localhost:3000",
+  "wss://localhost:3000",
+  "ws://127.0.0.1:3000",
+];
+
+if (process.env.NEXT_PUBLIC_API_URL) {
+  connectSources.push(process.env.NEXT_PUBLIC_API_URL);
+}
+
 const securityHeaders = [
   {
     key: "Strict-Transport-Security",
@@ -33,7 +50,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
-      "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 https://*.yourdomain.com ws://localhost:3000 wss://localhost:3000 ws://127.0.0.1:3000",
+      `connect-src ${Array.from(new Set(connectSources)).join(" ")}`,
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
