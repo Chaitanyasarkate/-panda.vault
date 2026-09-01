@@ -200,7 +200,6 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       });
     } catch (err: any) {
       set({ isLoading: false, error: err.message || 'Registration failed' });
-      throw err;
     }
   },
 
@@ -264,15 +263,19 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       // 5. Fetch and decrypt vault items
       await get().fetchAndDecryptVault();
     } catch (err: any) {
-      set({ isLoading: false, error: err.message || 'Login failed' });
-      throw err;
+      const rawMsg = err.message || 'Login failed';
+      const userFriendlyMsg = rawMsg.includes('Invalid email or password')
+        ? "Invalid email or password. If you haven't created your vault on this database yet, please click 'Sign up' below to create it."
+        : rawMsg;
+      set({ isLoading: false, error: userFriendlyMsg });
     }
   },
 
   unlockVault: async (masterPassword: string) => {
     const { userSalt, userEmail } = get();
     if (!userEmail) {
-      throw new Error('No email found to unlock vault');
+      set({ error: 'No email found to unlock vault' });
+      return;
     }
 
     set({ isLoading: true, error: null });
@@ -323,7 +326,6 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       await get().fetchAndDecryptVault();
     } catch (err: any) {
       set({ isLoading: false, error: err.message || 'Unlock failed. Incorrect Master Password.' });
-      throw err;
     }
   },
 
