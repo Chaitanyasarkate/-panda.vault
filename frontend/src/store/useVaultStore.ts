@@ -71,13 +71,11 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     try {
       if (typeof window === 'undefined') return;
 
-      // Clean up any insecure legacy storage keys
-      sessionStorage.removeItem('vaultx_tab_vmk');
-
       const savedEmail = sessionStorage.getItem('vaultx_user_email') || localStorage.getItem('vaultx_remembered_email');
       const savedSalt = sessionStorage.getItem('vaultx_user_salt');
+      const tabVmk = sessionStorage.getItem('vaultx_session_vmk');
 
-      // Check if active backend session exists via HTTP-only cookie
+      // Check if active backend session exists via HTTP-only cookie or token
       let profile: any = null;
       try {
         profile = await apiRequest('/api/v1/auth/me', { method: 'GET' });
@@ -88,6 +86,25 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       if (profile) {
         const activeEmail = profile.email || savedEmail;
         const activeSalt = profile.user_salt || savedSalt;
+
+        // If this active browser tab has a cached in-tab session key, seamlessly restore the unlocked vault
+        if (tabVmk) {
+          try {
+            const rawVmkBytes: number[] = JSON.parse(tabVmk);
+            set({
+              isAuthenticated: true,
+              isUnlocked: true,
+              userEmail: activeEmail,
+              userSalt: activeSalt,
+              rawVmkBytes,
+              isSessionChecking: false,
+            });
+            await get().fetchAndDecryptVault();
+            return;
+          } catch {
+            sessionStorage.removeItem('vaultx_session_vmk');
+          }
+        }
 
         // Backend session is valid; prompt user to unlock vault with master password
         set({
@@ -116,7 +133,9 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   },
 
   lockVault: () => {
-    // Volatile key zeroing
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('vaultx_session_vmk');
+    }
     set({
       isUnlocked: false,
       rawVmkBytes: null,
@@ -153,7 +172,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       const vmkIv = response.vmk_iv || response.user?.vmk_iv || encryptedVmk.vmkIvBase64;
       const userEmail = response.email || response.user?.email || email;
 
-      // 5. Decrypt VMK strictly in volatile memory
+      // 5. Decrypt VMK in memory
       const { rawVmkBytes } = await decryptVmkWorker(
         encVmk,
         vmkIv,
@@ -161,6 +180,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       );
 
       if (typeof window !== 'undefined') {
+        sessionStorage.setItem('vaultx_session_vmk', JSON.stringify(rawVmkBytes));
         sessionStorage.setItem('vaultx_user_email', userEmail);
         sessionStorage.setItem('vaultx_user_salt', userSalt);
         localStorage.setItem('vaultx_remembered_email', userEmail);
@@ -212,7 +232,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         throw new Error('Encrypted Vault Key not returned by server.');
       }
 
-      // 4. Decrypt VMK into volatile memory
+      // 4. Decrypt VMK in memory
       const { rawVmkBytes } = await decryptVmkWorker(
         encVmk,
         vmkIv,
@@ -220,6 +240,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       );
 
       if (typeof window !== 'undefined') {
+        sessionStorage.setItem('vaultx_session_vmk', JSON.stringify(rawVmkBytes));
         sessionStorage.setItem('vaultx_user_email', userEmail);
         sessionStorage.setItem('vaultx_user_salt', userSalt);
         localStorage.setItem('vaultx_remembered_email', userEmail);
@@ -271,7 +292,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       // 2. Derive MK
       const { masterKeyBytes } = await deriveKeysWorker(masterPassword, activeSalt!);
 
-      // 3. Decrypt VMK into volatile memory
+      // 3. Decrypt VMK into memory
       const { rawVmkBytes } = await decryptVmkWorker(
         encVmk,
         vmkIv,
@@ -279,6 +300,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       );
 
       if (typeof window !== 'undefined') {
+        sessionStorage.setItem('vaultx_session_vmk', JSON.stringify(rawVmkBytes));
         sessionStorage.setItem('vaultx_user_email', userEmail);
         sessionStorage.setItem('vaultx_user_salt', activeSalt!);
       }
@@ -306,6 +328,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       console.error('Logout error:', err);
     } finally {
       if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('vaultx_session_vmk');
         sessionStorage.removeItem('vaultx_user_email');
         sessionStorage.removeItem('vaultx_user_salt');
       }

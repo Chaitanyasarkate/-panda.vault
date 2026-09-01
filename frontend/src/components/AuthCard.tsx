@@ -35,6 +35,18 @@ export const AuthCard: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [zkAcknowledged, setZkAcknowledged] = useState(false);
 
+  React.useEffect(() => {
+    if (isAuthenticated && userEmail) {
+      setMode('unlock');
+      setEmail(userEmail);
+    } else {
+      const remembered = typeof window !== 'undefined' ? localStorage.getItem('vaultx_remembered_email') : null;
+      if (remembered) {
+        setEmail(remembered);
+      }
+    }
+  }, [isAuthenticated, userEmail]);
+
   const handleToggleMode = (newMode: 'login' | 'register') => {
     setMode(newMode);
     clearError();
