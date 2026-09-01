@@ -7,14 +7,16 @@ const connectSources = [
   "https://*.yourdomain.com",
   "https://*.onrender.com",
   "https://panda-vault.onrender.com",
+  "https://panda-vault-backend.onrender.com",
   "https://*.vercel.app",
+  "https://*.railway.app",
   "ws://localhost:3000",
   "wss://localhost:3000",
   "ws://127.0.0.1:3000",
 ];
 
 if (process.env.NEXT_PUBLIC_API_URL) {
-  connectSources.push(process.env.NEXT_PUBLIC_API_URL);
+  connectSources.push(process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, ''));
 }
 
 const securityHeaders = [

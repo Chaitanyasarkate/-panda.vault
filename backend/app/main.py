@@ -42,7 +42,7 @@ origins = settings.get_cors_origins()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"^https://.*\.vercel\.app$",
+    allow_origin_regex=r"^https://.*(\.onrender\.com|\.vercel\.app|\.railway\.app)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -55,7 +55,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     
     # Validate origin against allowed whitelist
     req_origin = request.headers.get("origin", "")
-    allowed_origin = req_origin if req_origin in origins else (origins[0] if origins else "*")
+    allowed_origin = req_origin if req_origin else "*"
     
     # Return sanitized error message without leaking internal database or system details
     error_detail = "An internal server error occurred. Please try again later."
