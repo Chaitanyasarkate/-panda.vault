@@ -15,6 +15,8 @@ import {
   Zap,
   RefreshCw,
   Sliders,
+  Settings,
+  Server,
   AlertCircle
 } from 'lucide-react';
 import { ExtensionVaultItem } from '../lib/messaging';
@@ -27,6 +29,10 @@ export const Popup: React.FC = () => {
   const [keepLoggedIn, setKeepLoggedIn] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Server URL settings
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [apiUrl, setApiUrl] = useState('https://panda-vault-backend.onrender.com');
 
   // Active tab & matched credentials
   const [activeDomain, setActiveDomain] = useState<string>('');
@@ -53,6 +59,9 @@ export const Popup: React.FC = () => {
         setUserEmail(res.data.userEmail || '');
         setActiveDomain(res.data.activeDomain || '');
         setActiveUrl(res.data.activeUrl || '');
+        if (res.data.apiBaseUrl) {
+          setApiUrl(res.data.apiBaseUrl.replace(/\/api\/v1\/?$/, ''));
+        }
         if (res.data.keepLoggedIn !== undefined) {
           setKeepLoggedIn(res.data.keepLoggedIn);
         }
@@ -64,12 +73,15 @@ export const Popup: React.FC = () => {
     });
 
     // Check saved email & preference in storage
-    chrome.storage.local.get(['saved_email', 'keep_logged_in'], (result) => {
+    chrome.storage.local.get(['saved_email', 'keep_logged_in', 'api_server_url'], (result) => {
       if (result.saved_email && !userEmail) {
         setUserEmail(result.saved_email);
       }
       if (result.keep_logged_in !== undefined) {
         setKeepLoggedIn(result.keep_logged_in);
+      }
+      if (result.api_server_url) {
+        setApiUrl(result.api_server_url.replace(/\/api\/v1\/?$/, ''));
       }
     });
 
@@ -87,6 +99,16 @@ export const Popup: React.FC = () => {
       if (res?.success && res.data) {
         setAllItems(res.data.items || []);
       }
+    });
+  };
+
+  const handleSaveApiUrl = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanUrl = apiUrl.trim().replace(/\/+$/, '');
+    chrome.storage.local.set({ api_server_url: cleanUrl }, () => {
+      chrome.runtime.sendMessage({ type: 'SET_API_URL', payload: { url: cleanUrl } });
+      setIsSettingsOpen(false);
+      setError(null);
     });
   };
 
@@ -199,7 +221,7 @@ export const Popup: React.FC = () => {
   };
 
   const openWebApp = () => {
-    chrome.tabs.create({ url: 'http://localhost:3000' });
+    chrome.tabs.create({ url: 'https://panda-vault-frontend.onrender.com' });
   };
 
   const filteredAllItems = allItems.filter((i) => {
@@ -227,6 +249,16 @@ export const Popup: React.FC = () => {
 
         <div className="flex items-center space-x-1.5">
           <button
+            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+            className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+              isSettingsOpen ? 'text-[#f5c518] bg-[#152319]' : 'text-slate-400 hover:text-slate-200'
+            }`}
+            title="Backend Server Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+
+          <button
             onClick={openWebApp}
             className="p-1.5 rounded-full text-slate-400 hover:text-[#f5c518] hover:bg-[#152319] transition-colors cursor-pointer"
             title="Open Web Vault"
@@ -248,7 +280,57 @@ export const Popup: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1 p-4 flex flex-col justify-between overflow-y-auto">
-        {!isUnlocked ? (
+        {/* Settings Panel */}
+        {isSettingsOpen ? (
+          <div className="my-auto space-y-4">
+            <div className="text-center space-y-1">
+              <h2 className="text-sm font-black text-[#f5c518] uppercase tracking-wider flex items-center justify-center gap-1.5">
+                <Server className="h-4 w-4" /> Backend Server
+              </h2>
+              <p className="text-[11px] text-slate-400">
+                Configure your API endpoint for syncing and unlocking.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveApiUrl} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">Server URL</label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://panda-vault-backend.onrender.com"
+                  value={apiUrl}
+                  onChange={(e) => setApiUrl(e.target.value)}
+                  className="w-full px-3.5 py-2 text-xs rounded-full gold-input font-mono"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setApiUrl('https://panda-vault-backend.onrender.com')}
+                  className="flex-1 py-1.5 text-[10px] font-bold rounded-full bg-[#152319] text-[#f5c518] border border-[#f5c518]/30 hover:bg-[#1a2d20] cursor-pointer"
+                >
+                  Cloud Render
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setApiUrl('http://localhost:8000')}
+                  className="flex-1 py-1.5 text-[10px] font-bold rounded-full bg-[#152319] text-slate-300 border border-white/10 hover:bg-[#1a2d20] cursor-pointer"
+                >
+                  Localhost
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-full gold-btn text-xs font-black uppercase tracking-wider mt-2 transition-all cursor-pointer"
+              >
+                Save Server URL
+              </button>
+            </form>
+          </div>
+        ) : !isUnlocked ? (
           /* Locked State - Unlock Form */
           <div className="my-auto space-y-4">
             <div className="text-center space-y-1">
@@ -263,7 +345,7 @@ export const Popup: React.FC = () => {
             {error && (
               <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-medium flex items-center gap-1.5">
                 <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{error}</span>
+                <span className="leading-snug">{error}</span>
               </div>
             )}
 
@@ -585,7 +667,7 @@ export const Popup: React.FC = () => {
 
       {/* Footer */}
       <footer className="px-4 py-2 bg-[#090f0b] border-t border-white/5 text-[10px] text-center text-slate-500 font-mono">
-        panda.vault extension v1.0.0
+        panda.vault extension v1.0.1
       </footer>
     </div>
   );

@@ -28,7 +28,23 @@ const state: ExtensionSessionState = {
   lastActivity: Date.now(),
 };
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const DEFAULT_API_BASE_URL = 'https://panda-vault-backend.onrender.com/api/v1';
+
+async function getApiBaseUrl(): Promise<string> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['api_server_url'], (res) => {
+      if (res?.api_server_url && typeof res.api_server_url === 'string') {
+        let base = res.api_server_url.trim().replace(/\/+$/, '');
+        if (!base.endsWith('/api/v1')) {
+          base = `${base}/api/v1`;
+        }
+        resolve(base);
+      } else {
+        resolve(DEFAULT_API_BASE_URL);
+      }
+    });
+  });
+}
 
 // Restore session from in-memory session storage if service worker restarted
 if (chrome.storage?.session) {
@@ -76,12 +92,13 @@ function persistSessionState() {
 
 // Fetch encrypted items from backend and decrypt locally in memory
 async function fetchAndDecryptVault(vmk: CryptoKey, token?: string | null): Promise<ExtensionVaultItem[]> {
+  const apiBase = await getApiBaseUrl();
   const headers: Record<string, string> = {};
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE_URL}/vault/items`, {
+  const res = await fetch(`${apiBase}/vault/items`, {
     method: 'GET',
     headers,
     credentials: 'include',
@@ -134,6 +151,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
           const activeUrl = tabs[0]?.url || '';
           const parsed = parseOrigin(activeUrl);
+          const currentApi = await getApiBaseUrl();
 
           sendResponse({
             success: true,
@@ -144,20 +162,54 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               activeUrl,
               activeDomain: parsed?.hostname || '',
               totalItems: state.decryptedItems.length,
+              apiBaseUrl: currentApi,
             },
           });
           break;
         }
 
+        case 'SET_API_URL': {
+          const newUrl = message.payload?.url;
+          if (newUrl) {
+            chrome.storage.local.set({ api_server_url: newUrl }, () => {
+              sendResponse({ success: true });
+            });
+          } else {
+            sendResponse({ success: false, error: 'Invalid URL' });
+          }
+          break;
+        }
+
         case 'UNLOCK_VAULT': {
           const { email, masterPassword, keepLoggedIn } = message.payload;
+          let apiBase = await getApiBaseUrl();
 
           // 1. Fetch challenge salt from server
-          const challengeRes = await fetch(`${API_BASE_URL}/auth/login/challenge`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }),
-          });
+          let challengeRes: Response;
+          try {
+            challengeRes = await fetch(`${apiBase}/auth/login/challenge`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email }),
+            });
+          } catch (networkErr: any) {
+            // Fallback attempt to local backend if remote is cold/unreachable
+            if (!apiBase.includes('localhost')) {
+              try {
+                const localBase = 'http://localhost:8000/api/v1';
+                challengeRes = await fetch(`${localBase}/auth/login/challenge`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email }),
+                });
+                apiBase = localBase;
+              } catch {
+                throw new Error(`Cannot connect to server at ${apiBase}. Please verify backend is running.`);
+              }
+            } else {
+              throw new Error(`Cannot connect to server at ${apiBase}: ${networkErr.message}`);
+            }
+          }
 
           if (!challengeRes.ok) {
             throw new Error('Invalid account or user not found');
@@ -174,7 +226,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const { masterKeyBytes, authKeyHex } = await deriveKeys(masterPassword, userSalt);
 
           // 3. Login to get encrypted VMK
-          const loginRes = await fetch(`${API_BASE_URL}/auth/login`, {
+          const loginRes = await fetch(`${apiBase}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
