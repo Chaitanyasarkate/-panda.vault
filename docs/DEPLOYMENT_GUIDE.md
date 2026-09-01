@@ -1,182 +1,103 @@
-# panda.vault — Production Deployment & Security Runbook
+# 🐼 panda.vault — Production Deployment Guide (Render)
 
-This guide documents the step-by-step production deployment of **panda.vault** following a Zero-Knowledge, Zero-Trust architecture.
+This guide documents the complete, step-by-step production deployment of **panda.vault** on **Render** using a Zero-Knowledge, high-security architecture.
 
 ---
 
-## 1. Production Architecture Overview
+## 1. Production Architecture on Render
 
 ```text
-  Internet Client (Browser / Extension)
-               │
-               ▼ HTTPS (TLS 1.3 Strict)
-  ┌─────────────────────────────────────────┐
-  │            Cloudflare Edge              │
-  │  - WAF & DDoS Shield                    │
-  │  - DNS & SSL Termination                │
-  └────────────┬────────────────────────────┘
-               │
-       ┌───────┴────────────────────────────┐
-       │                                    │
-       ▼                                    ▼
-┌───────────────────────────┐   ┌───────────────────────────┐
-│     Vercel (Frontend)     │   │     Cloudflare Tunnel     │
-│ - Next.js 16 (App Router) │   │ (cloudflared daemon)      │
-│ - Zero-Knowledge Crypto   │   │ (Zero inbound open ports) │
-│ - Security Headers & CSP  │   └─────────────┬─────────────┘
-└──────────────┬────────────┘                 │
-               │ HTTPS API Requests           │ Private VPC
-               └─────────────────────────────►│
-                                              ▼
-                                ┌───────────────────────────┐
-                                │   VPS (Docker Compose)    │
-                                │   ┌─────────────────────┐ │
-                                │   │ FastAPI Backend     │ │
-                                │   │ (Non-root UID 10001)│ │
-                                │   └──────────┬──────────┘ │
-                                │              │ Internal   │
-                                │              │ Network    │
-                                │              ▼            │
-                                │   ┌─────────────────────┐ │
-                                │   │ PostgreSQL 16 (DB)  │ │
-                                │   │ (0 host open ports) │ │
-                                │   └─────────────────────┘ │
-                                └───────────────────────────┘
+               Internet Client (Browser / Extension)
+                                │
+                                ▼ HTTPS (TLS 1.3)
+   ┌─────────────────────────────────────────────────────────┐
+   │                     Render Cloud                        │
+   │                                                         │
+   │  ┌────────────────────────┐    ┌─────────────────────┐  │
+   │  │ Frontend Web Service   │    │ Backend Web Service │  │
+   │  │ (Next.js 16 UI)        │───►│ (FastAPI REST API)  │  │
+   │  │ panda-vault-frontend   │    │ panda-vault-backend │  │
+   │  └────────────────────────┘    └──────────┬──────────┘  │
+   │                                           │             │
+   │                                           │ Internal    │
+   │                                           │ Network     │
+   │                                           ▼             │
+   │                                ┌─────────────────────┐  │
+   │                                │ Managed PostgreSQL  │  │
+   │                                │ (panda-vault-db)    │  │
+   │                                └─────────────────────┘  │
+   └─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Step 1: Generate High-Entropy Production Secrets
+## 2. Step 1: Provision PostgreSQL Database on Render
 
-Run the built-in cryptographic secret generator on your local machine:
-
-```bash
-python scripts/generate_secrets.py > .env.production
-```
-
-This populates `.env.production` with 256-bit CSPRNG tokens:
-- `JWT_SECRET`: Used for short-lived session signing
-- `PEPPER_SECRET`: Used for anti-enumeration dummy salts
-- `POSTGRES_PASSWORD`: High-entropy database credential
-
-> [!CAUTION]
-> **NEVER** commit `.env.production` to GitHub. Store a copy in a secure offline location.
+1. Log in to your **[Render Dashboard](https://dashboard.render.com)**.
+2. Click **New +** $\rightarrow$ **PostgreSQL**.
+3. Configure the database:
+   - **Name**: `panda-vault-db`
+   - **Database**: `panda_vault_db`
+   - **User**: `panda_vault_db_user`
+   - **Region**: Choose the region closest to you (e.g. Singapore, Oregon, Frankfurt).
+4. Click **Create Database**.
+5. Once created, copy the **Internal Database URL** (e.g. `postgresql://panda_vault_db_user:PASSWORD@dpg-xxxxxx-a/panda_vault_db`).
 
 ---
 
-## 3. Step 2: Deploy Frontend on Vercel
+## 3. Step 2: Deploy Backend Web Service (FastAPI)
 
-1. Import your GitHub repository into **Vercel** (`https://vercel.com`).
-2. Set **Root Directory** to `frontend`.
-3. In **Environment Variables**, add:
-   ```env
-   NEXT_PUBLIC_API_URL=https://api.yourdomain.com
-   ```
-4. Click **Deploy**. Vercel will automatically build and serve the zero-knowledge frontend with global CDN edge caching.
-5. In **Custom Domains**, add your frontend domain (e.g., `vault.yourdomain.com`).
-
----
-
-## 4. Step 3: Deploy Backend & Isolated Database on VPS
-
-1. SSH into your VPS (Ubuntu 22.04 / 24.04 recommended):
-   ```bash
-   ssh root@your-vps-ip
-   ```
-2. Install Docker and Docker Compose:
-   ```bash
-   apt-get update && apt-get install -y docker.io docker-compose-v2
-   systemctl enable --now docker
-   ```
-3. Clone the repository on the VPS:
-   ```bash
-   git clone https://github.com/your-username/pandavault.git /opt/pandavault
-   cd /opt/pandavault
-   ```
-4. Copy your generated `.env.production` to `/opt/pandavault/.env.production`.
-5. Start the production cluster:
-   ```bash
-   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
-   ```
-6. Verify containers are running and healthy:
-   ```bash
-   docker compose -f docker-compose.prod.yml ps
-   ```
+1. In Render Dashboard, click **New +** $\rightarrow$ **Web Service**.
+2. Connect your GitHub repository: `https://github.com/Chaitanyasarkate/-panda.vault`.
+3. Configure settings:
+   - **Name**: `panda-vault-backend`
+   - **Root Directory**: `backend`
+   - **Runtime**: `Python`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+4. Under **Environment Variables**, add:
+   | Key | Value |
+   | :--- | :--- |
+   | **`DATABASE_URL`** | *(Paste your PostgreSQL URL from Step 1)* |
+   | **`ENVIRONMENT`** | `production` |
+   | **`JWT_SECRET`** | *(Generate a random 64-char string)* |
+   | **`PEPPER_SECRET`** | *(Generate a random 64-char string)* |
+   | **`COOKIE_SECURE`** | `true` |
+5. Click **Create Web Service**.
+6. Copy your backend URL once live: (e.g. `https://panda-vault-backend.onrender.com`).
 
 ---
 
-## 5. Step 4: Configure Cloudflare Tunnel (Zero Open Inbound Ports)
+## 4. Step 3: Deploy Frontend Web Service (Next.js)
 
-Using Cloudflare Tunnel allows your VPS firewall to block **all inbound ports (including 80 and 443)**, exposing the API strictly through Cloudflare's secure edge.
-
-1. In the **Cloudflare Zero Trust Dashboard** (`https://one.dash.cloudflare.com`):
-   - Go to **Networks** $\rightarrow$ **Tunnels**.
-   - Click **Create a Tunnel** (select `Cloudflared`).
-   - Name it `pandavault-api`.
-2. Copy the **Tunnel Token** provided in the dashboard.
-3. In `/opt/pandavault/.env.production`, set:
-   ```env
-   CLOUDFLARE_TUNNEL_TOKEN=your_token_here
-   ```
-4. In the Cloudflare Tunnel configuration tab:
-   - **Public Hostname**: `api.yourdomain.com`
-   - **Service Type**: `HTTP`
-   - **URL**: `backend:8000`
-5. Restart the compose stack:
-   ```bash
-   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
-   ```
-6. On your VPS firewall (UFW), ensure all ports except SSH (22) are closed:
-   ```bash
-   ufw default deny incoming
-   ufw default allow outgoing
-   ufw allow 22/tcp
-   ufw enable
-   ```
+1. In Render Dashboard, click **New +** $\rightarrow$ **Web Service**.
+2. Connect the same GitHub repository: `https://github.com/Chaitanyasarkate/-panda.vault`.
+3. Configure settings:
+   - **Name**: `panda-vault-frontend`
+   - **Root Directory**: `frontend`
+   - **Runtime**: `Node`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm run start`
+4. Under **Environment Variables**, add:
+   | Key | Value |
+   | :--- | :--- |
+   | **`NEXT_PUBLIC_API_URL`** | `https://panda-vault-backend.onrender.com` |
+   | **`NODE_ENV`** | `production` |
+5. Click **Create Web Service**.
+6. Open your live frontend URL (e.g. `https://panda-vault-frontend.onrender.com`).
 
 ---
 
-## 6. Step 5: Configure Automated Encrypted Backups
-
-Set up an automated daily cron job on the VPS to dump and AES-256 encrypt PostgreSQL:
-
-1. Make scripts executable:
-   ```bash
-   chmod +x /opt/pandavault/scripts/*.sh
-   ```
-2. Open crontab:
-   ```bash
-   crontab -e
-   ```
-3. Add a daily backup rule at 02:00 AM:
-   ```cron
-   0 2 * * * BACKUP_ENCRYPTION_KEY="your-strong-backup-passphrase" /opt/pandavault/scripts/backup.sh >> /var/log/pandavault_backup.log 2>&1
-   ```
-
-To test restoring a backup:
-```bash
-BACKUP_ENCRYPTION_KEY="your-strong-backup-passphrase" /opt/pandavault/scripts/restore.sh /var/backups/pandavault/pandavault_backup_TIMESTAMP.sql.gz.enc
-```
-
----
-
-## 7. Step 6: Verification & Health Checks
+## 5. Step 4: Verification & Health Checks
 
 1. Verify backend health endpoint:
    ```bash
-   curl -i https://api.yourdomain.com/health
+   curl -i https://panda-vault-backend.onrender.com/health
    ```
    *Expected Response:*
    ```json
    {
-     "status": "ok",
-     "service": "panda.vault",
-     "database": "connected",
-     "database_engine": "postgresql",
-     "environment": "production",
-     "phase": "Production Ready"
+     "status": "healthy"
    }
    ```
-2. Navigate to `https://vault.yourdomain.com` and register a new production account.
-3. Add a test credential, refresh the page, unlock the vault, and verify that credentials decrypt cleanly.
-4. Load the browser extension, connect it to your production API URL, and verify autofill works.
+2. Navigate to your frontend URL in the browser, register your account, and verify that your zero-knowledge encrypted vault unlocks smoothly!
