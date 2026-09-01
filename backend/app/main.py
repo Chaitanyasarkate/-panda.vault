@@ -69,22 +69,22 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-@app.get("/", tags=["Root"])
+@app.api_route("/", methods=["GET", "HEAD"], tags=["Root"])
 def root():
-    """Root endpoint for status checks."""
+    """Root endpoint supporting GET and HEAD health checks."""
     return {
         "status": "ok",
         "service": "panda.vault API"
     }
 
-@app.get("/health", tags=["Health"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["Health"])
 def health():
-    """Dedicated health endpoint returning instant health status."""
+    """Dedicated health endpoint supporting GET and HEAD probes."""
     return {
         "status": "healthy"
     }
 
-@app.get("/api/health", tags=["Health"])
+@app.api_route("/api/health", methods=["GET", "HEAD"], tags=["Health"])
 async def health_check(db: AsyncSession = Depends(get_db)):
     """
     Detailed health check endpoint verifying database connectivity.
