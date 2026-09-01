@@ -110,11 +110,12 @@ async def register(
     await db.refresh(user)
 
     # Set secure HTTP-only cookies (dynamically configured via settings.COOKIE_SECURE)
+    cookie_samesite = "none" if settings.COOKIE_SECURE else "lax"
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        samesite="strict",
+        samesite=cookie_samesite,
         secure=settings.COOKIE_SECURE,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
@@ -122,7 +123,7 @@ async def register(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        samesite="strict",
+        samesite=cookie_samesite,
         secure=settings.COOKIE_SECURE,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
         path="/api/v1/auth"
@@ -223,11 +224,12 @@ async def login(
     await db.refresh(user)
 
     # Set secure HTTP-only cookies
+    cookie_samesite = "none" if settings.COOKIE_SECURE else "lax"
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        samesite="strict",
+        samesite=cookie_samesite,
         secure=settings.COOKIE_SECURE,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
@@ -235,7 +237,7 @@ async def login(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        samesite="strict",
+        samesite=cookie_samesite,
         secure=settings.COOKIE_SECURE,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
         path="/api/v1/auth"
@@ -357,12 +359,13 @@ async def refresh_token_endpoint(
 
     # Issue new access token
     new_access_token = create_access_token(user.id, user.email)
+    cookie_samesite = "none" if settings.COOKIE_SECURE else "lax"
 
     response.set_cookie(
         key="access_token",
         value=new_access_token,
         httponly=True,
-        samesite="strict",
+        samesite=cookie_samesite,
         secure=settings.COOKIE_SECURE,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )

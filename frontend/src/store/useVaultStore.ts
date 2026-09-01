@@ -75,7 +75,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       const savedSalt = sessionStorage.getItem('vaultx_user_salt');
       const tabVmk = sessionStorage.getItem('vaultx_session_vmk');
 
-      // Check if active backend session exists via HTTP-only cookie or token
+      // Check if active backend session exists via HTTP-only cookie or Bearer token
       let profile: any = null;
       try {
         profile = await apiRequest('/api/v1/auth/me', { method: 'GET' });
@@ -180,6 +180,9 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       );
 
       if (typeof window !== 'undefined') {
+        if (response.access_token) {
+          sessionStorage.setItem('vaultx_access_token', response.access_token);
+        }
         sessionStorage.setItem('vaultx_session_vmk', JSON.stringify(rawVmkBytes));
         sessionStorage.setItem('vaultx_user_email', userEmail);
         sessionStorage.setItem('vaultx_user_salt', userSalt);
@@ -240,6 +243,9 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       );
 
       if (typeof window !== 'undefined') {
+        if (response.access_token) {
+          sessionStorage.setItem('vaultx_access_token', response.access_token);
+        }
         sessionStorage.setItem('vaultx_session_vmk', JSON.stringify(rawVmkBytes));
         sessionStorage.setItem('vaultx_user_email', userEmail);
         sessionStorage.setItem('vaultx_user_salt', userSalt);
@@ -328,6 +334,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       console.error('Logout error:', err);
     } finally {
       if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('vaultx_access_token');
         sessionStorage.removeItem('vaultx_session_vmk');
         sessionStorage.removeItem('vaultx_user_email');
         sessionStorage.removeItem('vaultx_user_salt');

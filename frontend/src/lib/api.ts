@@ -7,6 +7,14 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}): P
     'Content-Type': 'application/json',
   };
 
+  // Attach stored JWT Bearer token if available
+  if (typeof window !== 'undefined') {
+    const token = sessionStorage.getItem('vaultx_access_token');
+    if (token) {
+      defaultHeaders['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
   const config: RequestInit = {
     ...options,
     headers: {
@@ -20,7 +28,8 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}): P
   try {
     response = await fetch(url, config);
   } catch (err: any) {
-    throw new Error(err?.message || 'Network error: Could not connect to backend server');
+    console.error(`[API Network Error] Failed to connect to ${url}:`, err);
+    throw new Error(err?.message || `Network error: Could not connect to backend at ${API_BASE_URL}`);
   }
 
   if (response.status === 204) {
