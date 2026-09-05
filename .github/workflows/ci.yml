@@ -10,6 +10,9 @@ jobs:
   backend-audit-and-test:
     name: Backend Security & Pytest
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -19,25 +22,28 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
-          pip install pytest pytest-asyncio anyio bandit
+          pip install -r requirements.txt
+          pip install bandit
 
       - name: Security Scan (Bandit)
         run: |
-          bandit -r backend/app -ll
+          bandit -r app -ll
 
       - name: Run Backend Pytest Suite
         run: |
-          cd backend
           python -m pytest -v
 
   frontend-test-and-build:
     name: Frontend Vitest & Next.js Build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -47,26 +53,23 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-          cache-dependency-path: frontend/package.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install Frontend Dependencies
-        run: |
-          cd frontend
-          npm ci
+        run: npm ci
 
       - name: Run Frontend Vitest Suite
-        run: |
-          cd frontend
-          npx vitest run
+        run: npx vitest run
 
       - name: Build Next.js Production Bundle
-        run: |
-          cd frontend
-          npm run build
+        run: npm run build
 
   extension-test-and-build:
     name: Extension Vitest & Bundle Build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extension
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -76,19 +79,13 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-          cache-dependency-path: extension/package.json
+          cache-dependency-path: extension/package-lock.json
 
       - name: Install Extension Dependencies
-        run: |
-          cd extension
-          npm ci
+        run: npm ci
 
       - name: Run Extension Vitest Suite
-        run: |
-          cd extension
-          npx vitest run
+        run: npx vitest run
 
       - name: Build Extension Production Bundle
-        run: |
-          cd extension
-          npm run build
+        run: npm run build
