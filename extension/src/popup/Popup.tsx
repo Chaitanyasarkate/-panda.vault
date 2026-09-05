@@ -313,22 +313,6 @@ export const Popup: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-1.5">
-          {isUnlocked && (
-            <button
-              onClick={() => {
-                setIsSettingsOpen(false);
-                setActiveTab(activeTab === 'add' ? 'matched' : 'add');
-              }}
-              className={`p-1.5 rounded-full transition-colors cursor-pointer ${
-                activeTab === 'add'
-                  ? 'text-[#f5c518] bg-[#152319] border border-[#f5c518]/30'
-                  : 'text-slate-300 hover:text-[#f5c518] hover:bg-[#152319]'
-              }`}
-              title="Add New Password"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          )}
 
           <button
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
