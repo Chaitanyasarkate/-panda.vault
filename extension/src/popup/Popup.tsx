@@ -17,7 +17,9 @@ import {
   Sliders,
   Settings,
   Server,
-  AlertCircle
+  AlertCircle,
+  Plus,
+  ArrowLeft
 } from 'lucide-react';
 import { ExtensionVaultItem } from '../lib/messaging';
 
@@ -41,10 +43,21 @@ export const Popup: React.FC = () => {
   const [allItems, setAllItems] = useState<ExtensionVaultItem[]>([]);
   
   // UI Tabs & state
-  const [activeTab, setActiveTab] = useState<'matched' | 'all' | 'generator'>('matched');
+  const [activeTab, setActiveTab] = useState<'matched' | 'all' | 'add' | 'generator'>('matched');
   const [searchQuery, setSearchQuery] = useState('');
   const [autofillSuccessId, setAutofillSuccessId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Add Item form state
+  const [newTitle, setNewTitle] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newUrl, setNewUrl] = useState('');
+  const [newCategory, setNewCategory] = useState('Logins');
+  const [newNotes, setNewNotes] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isSavingItem, setIsSavingItem] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Password Generator state
   const [genLength, setGenLength] = useState(16);
@@ -68,6 +81,15 @@ export const Popup: React.FC = () => {
 
         if (res.data.isUnlocked) {
           loadMatchedCredentials();
+        }
+
+        // Initialize Add Form prefilled data
+        if (res.data.activeDomain) {
+          const domainClean = res.data.activeDomain.replace(/^www\./, '');
+          setNewTitle(domainClean.charAt(0).toUpperCase() + domainClean.slice(1));
+        }
+        if (res.data.activeUrl) {
+          setNewUrl(res.data.activeUrl);
         }
       }
     });
@@ -153,6 +175,47 @@ export const Popup: React.FC = () => {
     });
   };
 
+  const handleAddNewItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim()) {
+      setError('Title is required');
+      return;
+    }
+
+    setIsSavingItem(true);
+    setError(null);
+
+    chrome.runtime.sendMessage(
+      {
+        type: 'ADD_ITEM',
+        payload: {
+          title: newTitle.trim(),
+          username: newUsername.trim(),
+          password: newPassword,
+          url: newUrl.trim(),
+          category: newCategory,
+          notes: newNotes.trim(),
+        },
+      },
+      (res) => {
+        setIsSavingItem(false);
+        if (res?.success) {
+          setSaveSuccess(true);
+          // Reset form fields
+          setNewPassword('');
+          setNewNotes('');
+          loadMatchedCredentials();
+          setTimeout(() => {
+            setSaveSuccess(false);
+            setActiveTab('matched');
+          }, 1500);
+        } else {
+          setError(res?.error || 'Failed to save password.');
+        }
+      }
+    );
+  };
+
   const handleExplicitAutofill = (item: ExtensionVaultItem) => {
     chrome.runtime.sendMessage(
       {
@@ -193,7 +256,7 @@ export const Popup: React.FC = () => {
     }
   };
 
-  const generateRandomPassword = (length: number) => {
+  const generateRandomPassword = (length: number): string => {
     const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const lower = 'abcdefghijklmnopqrstuvwxyz';
     const numbers = '0123456789';
@@ -217,7 +280,9 @@ export const Popup: React.FC = () => {
       [chars[i], chars[j]] = [chars[j], chars[i]];
     }
 
-    setGenPassword(chars.join(''));
+    const generated = chars.join('');
+    setGenPassword(generated);
+    return generated;
   };
 
   const openWebApp = () => {
@@ -248,6 +313,23 @@ export const Popup: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-1.5">
+          {isUnlocked && (
+            <button
+              onClick={() => {
+                setIsSettingsOpen(false);
+                setActiveTab(activeTab === 'add' ? 'matched' : 'add');
+              }}
+              className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                activeTab === 'add'
+                  ? 'text-[#f5c518] bg-[#152319] border border-[#f5c518]/30'
+                  : 'text-slate-300 hover:text-[#f5c518] hover:bg-[#152319]'
+              }`}
+              title="Add New Password"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          )}
+
           <button
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
             className={`p-1.5 rounded-full transition-colors cursor-pointer ${
@@ -413,7 +495,7 @@ export const Popup: React.FC = () => {
             </form>
           </div>
         ) : (
-          /* Unlocked State - Matched Credentials & Autofill */
+          /* Unlocked State */
           <div className="space-y-3">
             {/* Active Domain Bar */}
             <div className="p-2.5 rounded-xl bg-[#0e1711] border border-[#f5c518]/25 flex items-center justify-between">
@@ -448,7 +530,17 @@ export const Popup: React.FC = () => {
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                All Vault ({allItems.length})
+                All ({allItems.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('add')}
+                className={`flex-1 py-1 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  activeTab === 'add'
+                    ? 'bg-[#f5c518] text-[#0c140e] font-black'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Plus className="h-3 w-3" /> Add
               </button>
               <button
                 onClick={() => setActiveTab('generator')}
@@ -458,9 +550,120 @@ export const Popup: React.FC = () => {
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Generator
+                Gen
               </button>
             </div>
+
+            {/* Tab: Add Password */}
+            {activeTab === 'add' && (
+              <div className="space-y-2.5">
+                {saveSuccess ? (
+                  <div className="py-8 text-center space-y-2">
+                    <div className="h-10 w-10 mx-auto rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                      <Check className="h-6 w-6" />
+                    </div>
+                    <p className="text-xs font-bold text-emerald-300">
+                      Password encrypted & saved to vault!
+                    </p>
+                  </div>
+                ) : (
+                  <form onSubmit={handleAddNewItem} className="space-y-2.5">
+                    {error && (
+                      <div className="p-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-[11px] font-medium flex items-center gap-1.5">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                        <span className="leading-snug">{error}</span>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-300 mb-0.5">Item Title</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Google, GitHub, Netflix"
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs rounded-full gold-input"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-300 mb-0.5">Website URL</label>
+                      <input
+                        type="url"
+                        placeholder="https://example.com/login"
+                        value={newUrl}
+                        onChange={(e) => setNewUrl(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs rounded-full gold-input font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-300 mb-0.5">Username / Email</label>
+                      <input
+                        type="text"
+                        placeholder="user@example.com"
+                        value={newUsername}
+                        onChange={(e) => setNewUsername(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs rounded-full gold-input"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <label className="block text-[10px] font-bold text-slate-300">Password</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const pwd = generateRandomPassword(16);
+                            setNewPassword(pwd);
+                            setShowNewPassword(true);
+                          }}
+                          className="text-[10px] text-[#f5c518] hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                        >
+                          <Sparkles className="h-3 w-3" /> Quick Gen
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showNewPassword ? 'text' : 'password'}
+                          required
+                          placeholder="Password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className="w-full px-3 py-1.5 pr-8 text-xs rounded-full gold-input font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#f5c518] cursor-pointer"
+                        >
+                          {showNewPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSavingItem}
+                      className="w-full py-2 rounded-full gold-btn text-xs font-black uppercase tracking-wider mt-1 transition-all flex items-center justify-center space-x-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSavingItem ? (
+                        <span className="flex items-center space-x-1.5">
+                          <Sparkles className="h-3.5 w-3.5 animate-spin" />
+                          <span>Encrypting & Saving...</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center space-x-1.5">
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Save to Vault</span>
+                        </span>
+                      )}
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
 
             {/* Tab: Matched Credentials */}
             {activeTab === 'matched' && (
@@ -474,10 +677,10 @@ export const Popup: React.FC = () => {
                       No credentials matched <strong>{activeDomain}</strong>.
                     </p>
                     <button
-                      onClick={() => setActiveTab('all')}
-                      className="text-[11px] text-[#f5c518] font-bold hover:underline cursor-pointer"
+                      onClick={() => setActiveTab('add')}
+                      className="inline-flex items-center gap-1 text-[11px] text-[#f5c518] font-bold hover:underline cursor-pointer"
                     >
-                      Browse All Vault Items
+                      <Plus className="h-3.5 w-3.5" /> Add Password for this Site
                     </button>
                   </div>
                 ) : (

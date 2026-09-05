@@ -2,7 +2,7 @@
  * Background Service Worker for panda.vault Chrome Extension.
  * Manages zero-knowledge in-memory session, origin matching, and tab communication.
  */
-import { deriveKeys, decryptVmk, decryptVaultItem } from '../lib/crypto';
+import { deriveKeys, decryptVmk, decryptVaultItem, encryptVaultItem } from '../lib/crypto';
 import { filterMatchingCredentials, parseOrigin } from '../lib/originMatcher';
 import { ExtensionVaultItem } from '../lib/messaging';
 
@@ -286,6 +286,76 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         case 'GET_ALL_CREDENTIALS': {
           sendResponse({ success: true, data: { items: state.decryptedItems } });
+          break;
+        }
+
+        case 'ADD_ITEM': {
+          if (!state.isUnlocked || !state.rawVmk) {
+            throw new Error('Vault is locked. Unlock before adding items.');
+          }
+
+          const { title, username, password, url, category, notes } = message.payload;
+          if (!title) {
+            throw new Error('Title is required');
+          }
+
+          const itemPayload = {
+            title,
+            username: username || '',
+            password: password || '',
+            url: url || '',
+            category: category || 'Logins',
+            notes: notes || '',
+            favorite: false,
+          };
+
+          // 1. Encrypt payload client-side with VMK
+          const { encryptedPayloadBase64, ivBase64 } = await encryptVaultItem(itemPayload, state.rawVmk);
+
+          // 2. Send to backend
+          const apiBase = await getApiBaseUrl();
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          };
+          if (state.accessToken) {
+            headers['Authorization'] = `Bearer ${state.accessToken}`;
+          }
+
+          const createRes = await fetch(`${apiBase}/vault/items`, {
+            method: 'POST',
+            headers,
+            credentials: 'include',
+            body: JSON.stringify({
+              item_type: 'login',
+              category: category || 'Logins',
+              is_favorite: false,
+              encrypted_payload: encryptedPayloadBase64,
+              iv: ivBase64,
+            }),
+          });
+
+          if (!createRes.ok) {
+            const errData = await createRes.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Failed to save item to vault on server');
+          }
+
+          const createdData = await createRes.json();
+          const newItem: ExtensionVaultItem = {
+            id: createdData.id,
+            title,
+            username,
+            password,
+            url,
+            category: category || 'Logins',
+            notes,
+            favorite: false,
+          };
+
+          // 3. Add to local decrypted items state
+          state.decryptedItems = [newItem, ...state.decryptedItems];
+          persistSessionState();
+
+          sendResponse({ success: true, data: { item: newItem } });
           break;
         }
 

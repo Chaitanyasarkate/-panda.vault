@@ -83,6 +83,32 @@ export async function decryptVmk(
   );
 }
 
+export async function encryptVaultItem(
+  itemPayload: any,
+  vmk: CryptoKey,
+  itemId?: string
+): Promise<{ encryptedPayloadBase64: string; ivBase64: string }> {
+  const encoder = new TextEncoder();
+  const plaintextBytes = encoder.encode(JSON.stringify(itemPayload));
+
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+
+  const params: AesGcmParams = {
+    name: 'AES-GCM',
+    iv,
+  };
+  if (itemId) {
+    params.additionalData = encoder.encode(itemId);
+  }
+
+  const encryptedBuf = await crypto.subtle.encrypt(params, vmk, plaintextBytes);
+
+  return {
+    encryptedPayloadBase64: arrayBufferToBase64(encryptedBuf),
+    ivBase64: arrayBufferToBase64(iv.buffer),
+  };
+}
+
 export async function decryptVaultItem(
   encryptedPayloadBase64: string,
   ivBase64: string,
@@ -124,6 +150,15 @@ export function uint8ArrayToHex(bytes: Uint8Array): string {
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+export function arrayBufferToBase64(buffer: ArrayBufferLike): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 export function base64ToArrayBuffer(base64: string): ArrayBuffer {
