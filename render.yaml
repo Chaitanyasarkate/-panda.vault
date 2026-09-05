@@ -1,0 +1,59 @@
+services:
+  # ==========================================
+  # 1. FastAPI Backend Web Service
+  # ==========================================
+  - type: web
+    name: panda-vault-backend
+    env: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      - key: ENVIRONMENT
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PEPPER_SECRET
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: BACKEND_CORS_ORIGINS
+        value: "https://panda-vault.onrender.com,http://localhost:3000"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: panda-vault-db
+          property: connectionString
+
+  # ==========================================
+  # 2. Next.js Frontend Web Service
+  # ==========================================
+  - type: web
+    name: panda-vault
+    env: node
+    region: oregon
+    plan: free
+    rootDir: frontend
+    buildCommand: "npm ci && npm run build"
+    startCommand: "npm run start"
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        value: https://panda-vault-backend.onrender.com
+
+# ==========================================
+# 3. Managed PostgreSQL Database
+# ==========================================
+databases:
+  - name: panda-vault-db
+    plan: free
+    region: oregon
+    databaseName: vaultx_db
+    user: vaultx_user
