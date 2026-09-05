@@ -1,4 +1,4 @@
-import { deriveMasterKey, generateUserSalt } from '../lib/crypto/argon2';
+import { deriveMasterKey } from '../lib/crypto/argon2';
 import { deriveAuthKey } from '../lib/crypto/hkdf';
 import {
   generateVmk,
@@ -7,7 +7,6 @@ import {
   encryptVaultItem,
   decryptVaultItem
 } from '../lib/crypto/aes';
-import { UnencryptedVaultItem } from '../lib/crypto/types';
 
 // Web Worker Message Event Listener
 self.addEventListener('message', async (event: MessageEvent) => {
@@ -50,18 +49,20 @@ self.addEventListener('message', async (event: MessageEvent) => {
       case 'DECRYPT_VMK': {
         const { encryptedVmkBase64, vmkIvBase64, masterKeyBytes } = payload;
         const mkBytes = new Uint8Array(masterKeyBytes);
-        const vmk = await decryptVmk(encryptedVmkBase64, vmkIvBase64, mkBytes);
+        try {
+          const vmk = await decryptVmk(encryptedVmkBase64, vmkIvBase64, mkBytes);
+          const rawVmkBuf = await crypto.subtle.exportKey('raw', vmk);
 
-        // Export VMK raw bytes to send back to state manager worker memory
-        const rawVmkBuf = await crypto.subtle.exportKey('raw', vmk);
-
-        self.postMessage({
-          id,
-          type: 'DECRYPT_VMK_SUCCESS',
-          payload: {
-            rawVmkBytes: Array.from(new Uint8Array(rawVmkBuf)),
-          },
-        });
+          self.postMessage({
+            id,
+            type: 'DECRYPT_VMK_SUCCESS',
+            payload: {
+              rawVmkBytes: Array.from(new Uint8Array(rawVmkBuf)),
+            },
+          });
+        } catch {
+          throw new Error('Incorrect Master Password or corrupted vault key.');
+        }
         break;
       }
 
@@ -114,10 +115,11 @@ self.addEventListener('message', async (event: MessageEvent) => {
         throw new Error(`Unknown worker task type: ${type}`);
     }
   } catch (error: any) {
+    const errorMsg = error?.message || (typeof error === 'string' ? error : 'Operation failed during cryptographic processing');
     self.postMessage({
       id,
       type: 'ERROR',
-      error: error.message || 'Worker processing error',
+      error: errorMsg,
     });
   }
 });
