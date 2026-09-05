@@ -1,0 +1,22 @@
+name: panda.vault 24/7 Keep-Alive Heartbeat
+
+on:
+  schedule:
+    # Run every 10 minutes to prevent Render free-tier 15-minute inactivity spin-down
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    name: Ping Services
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Backend Health Endpoint
+        run: |
+          echo "Sending keep-alive ping to Backend..."
+          curl -s -f -m 30 https://panda-vault-backend.onrender.com/health || echo "Backend ping returned status code $?"
+
+      - name: Ping Frontend Web App
+        run: |
+          echo "Sending keep-alive ping to Frontend..."
+          curl -s -f -m 30 https://panda-vault.onrender.com/ || echo "Frontend ping returned status code $?"
