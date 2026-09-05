@@ -221,7 +221,7 @@ export const Popup: React.FC = () => {
   };
 
   const openWebApp = () => {
-    chrome.tabs.create({ url: 'https://panda-vault-frontend.onrender.com' });
+    chrome.tabs.create({ url: 'https://panda-vault.onrender.com' });
   };
 
   const filteredAllItems = allItems.filter((i) => {
