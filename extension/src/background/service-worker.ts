@@ -368,11 +368,116 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             throw new Error('No active browser tab found');
           }
 
-          // Send explicit autofill command to content script in the active tab
-          const fillRes = await chrome.tabs.sendMessage(activeTab.id, {
-            type: 'AUTOFILL_CREDENTIAL',
-            payload: { username, password, totpCode },
-          });
+          let fillRes: any = null;
+          try {
+            fillRes = await chrome.tabs.sendMessage(activeTab.id, {
+              type: 'AUTOFILL_CREDENTIAL',
+              payload: { username, password, totpCode },
+            });
+          } catch {
+            // Fallback: Programmatically inject and execute autofill function directly into the active tab
+            const injection = await chrome.scripting.executeScript({
+              target: { tabId: activeTab.id },
+              func: (uname?: string, pword?: string) => {
+                const fillInput = (el: HTMLInputElement, val: string) => {
+                  try {
+                    el.focus();
+                    const proto = Object.getPrototypeOf(el);
+                    const desc =
+                      Object.getOwnPropertyDescriptor(proto, 'value') ||
+                      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                    if (desc && desc.set) {
+                      desc.set.call(el, val);
+                    } else {
+                      el.value = val;
+                    }
+                    el.dispatchEvent(new Event('focus', { bubbles: true }));
+                    el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                    el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
+                    el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+                    el.dispatchEvent(new Event('blur', { bubbles: true }));
+                    const prevOutline = el.style.outline;
+                    el.style.outline = '2px solid #f5c518';
+                    setTimeout(() => {
+                      el.style.outline = prevOutline;
+                    }, 1200);
+                    return true;
+                  } catch {
+                    return false;
+                  }
+                };
+
+                const passSelectors = [
+                  'input[type="password"]:not([hidden]):not([style*="display: none"])',
+                  'input[autocomplete*="password" i]:not([hidden])',
+                  'input[name*="password" i]:not([hidden])',
+                  'input[id*="password" i]:not([hidden])',
+                  'input[placeholder*="password" i]:not([hidden])',
+                ];
+                let passEl: HTMLInputElement | null = null;
+                for (const s of passSelectors) {
+                  const el = document.querySelector<HTMLInputElement>(s);
+                  if (el && el.offsetParent !== null) {
+                    passEl = el;
+                    break;
+                  }
+                }
+
+                let userEl: HTMLInputElement | null = null;
+                const userSelectors = [
+                  'input[autocomplete="username"]',
+                  'input[autocomplete="email"]',
+                  'input[type="email"]',
+                  'input[name*="user" i]',
+                  'input[name*="email" i]',
+                  'input[name*="login" i]',
+                  'input[id*="user" i]',
+                  'input[id*="email" i]',
+                  'input[id*="login" i]',
+                  'input[placeholder*="email" i]',
+                  'input[placeholder*="user" i]',
+                  'input[type="text"]:not([type="password"])',
+                ];
+
+                if (passEl) {
+                  const parent = passEl.closest('form') || passEl.parentElement?.parentElement;
+                  if (parent) {
+                    for (const s of userSelectors) {
+                      const c = parent.querySelector<HTMLInputElement>(s);
+                      if (c && c !== passEl && c.offsetParent !== null) {
+                        userEl = c;
+                        break;
+                      }
+                    }
+                  }
+                }
+
+                if (!userEl) {
+                  for (const s of userSelectors) {
+                    const c = document.querySelector<HTMLInputElement>(s);
+                    if (c && c !== passEl && c.offsetParent !== null) {
+                      userEl = c;
+                      break;
+                    }
+                  }
+                }
+
+                const filled: string[] = [];
+                if (uname && userEl && fillInput(userEl, uname)) filled.push('username');
+                if (pword && passEl && fillInput(passEl, pword)) filled.push('password');
+
+                return { success: filled.length > 0, filledFields: filled };
+              },
+              args: [username, password],
+            });
+
+            fillRes = injection?.[0]?.result;
+          }
+
+          if (fillRes && fillRes.success === false) {
+            throw new Error('No username or password input fields found on active page');
+          }
 
           sendResponse({ success: true, data: fillRes });
           break;
