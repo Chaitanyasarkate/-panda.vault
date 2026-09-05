@@ -17,6 +17,18 @@ if (process.env.NEXT_PUBLIC_API_URL) {
   connectSources.push(process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, ''));
 }
 
+const isDev = process.env.NODE_ENV !== "production";
+
+const scriptSources = [
+  "'self'",
+  "'unsafe-inline'",
+  "'wasm-unsafe-eval'",
+];
+
+if (isDev) {
+  scriptSources.push("'unsafe-eval'");
+}
+
 const securityHeaders = [
   {
     key: "Strict-Transport-Security",
@@ -46,7 +58,7 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
+      `script-src ${scriptSources.join(" ")}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
