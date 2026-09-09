@@ -16,7 +16,7 @@ jobs:
           echo "Sending keep-alive ping to Backend..."
           curl -s -f -m 30 https://panda-vault-backend.onrender.com/health || echo "Backend ping returned status code $?"
 
-      - name: Ping Frontend Web App
+      - name: Ping Frontend Health Endpoint
         run: |
           echo "Sending keep-alive ping to Frontend..."
-          curl -s -f -m 30 https://panda-vault.onrender.com/ || echo "Frontend ping returned status code $?"
+          curl -s -f -m 30 https://panda-vault.onrender.com/health || echo "Frontend ping returned status code $?"
