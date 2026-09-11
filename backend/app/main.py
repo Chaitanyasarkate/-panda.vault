@@ -72,7 +72,7 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.api_route("/", methods=["GET", "HEAD"], tags=["Root"])
 def root():
-    """Root endpoint supporting GET and HEAD health checks."""
+    """Root endpoint supporting ultra-lightweight GET and HEAD health checks."""
     return {
         "status": "ok",
         "service": "panda.vault API"
@@ -80,7 +80,7 @@ def root():
 
 @app.api_route("/health", methods=["GET", "HEAD"], tags=["Health"])
 def health():
-    """Dedicated health endpoint supporting GET and HEAD probes."""
+    """Dedicated health endpoint supporting ultra-lightweight GET and HEAD probes."""
     return {
         "status": "healthy"
     }
