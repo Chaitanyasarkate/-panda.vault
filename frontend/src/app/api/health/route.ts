@@ -1,9 +1,20 @@
-import { NextResponse } from 'next/server';
-
 export async function GET() {
-  return NextResponse.json({ status: 'ok', service: 'panda-vault-frontend' }, { status: 200 });
+  return new Response('ok', {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/plain',
+      'Content-Length': '2',
+      'Cache-Control': 'no-cache',
+    },
+  });
 }
 
 export async function HEAD() {
-  return new Response(null, { status: 200 });
+  return new Response(null, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/plain',
+      'Content-Length': '0',
+    },
+  });
 }
