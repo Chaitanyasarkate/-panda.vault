@@ -24,7 +24,6 @@
 
 ## 🌟 Overview
 
-
 **panda.vault** is an open-source, client-side encrypted password manager built on strict zero-knowledge principles. Your master password and plaintext vault items **never leave your device or touch the server unencrypted**.
 
 ```text
@@ -42,6 +41,7 @@ User Master Password + Email Salt
 ```
 
 ---
+
 
 ## ✨ Key Features
 
